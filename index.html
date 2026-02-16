@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Parallax Inc.</title>
+    <meta name="description" content="Parallax Inc. — A New Perspective." />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400&family=Inter:wght@300;400&display=swap"
+        rel="stylesheet" />
+    <style>
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+            background: #F9F9F9;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* ── Particle canvas ──────────────────────────── */
+        #particle-canvas {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        /* ── Grid overlay (100px, always visible, flashlight) ── */
+        #grid-overlay {
+            position: fixed;
+            inset: -20px;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(0, 0, 0, 0.07) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 0, 0, 0.07) 1px, transparent 1px);
+            background-size: 100px 100px;
+            opacity: 1;
+            --mx: 50vw;
+            --my: 50vh;
+            -webkit-mask-image: radial-gradient(circle 350px at var(--mx) var(--my), white, rgba(255, 255, 255, 0.18));
+            mask-image: radial-gradient(circle 350px at var(--mx) var(--my), white, rgba(255, 255, 255, 0.18));
+            animation: gridBreathe 32s ease-in-out infinite;
+            will-change: transform;
+        }
+
+        @keyframes gridBreathe {
+            0%,
+            100% {
+                transform: translate(0, 0) skewX(0deg) skewY(0deg);
+            }
+
+            25% {
+                transform: translate(10px, -8px) skewX(0.4deg) skewY(0.15deg);
+            }
+
+            50% {
+                transform: translate(-6px, 12px) skewX(-0.3deg) skewY(-0.1deg);
+            }
+
+            75% {
+                transform: translate(8px, -4px) skewX(0.2deg) skewY(0.25deg);
+            }
+        }
+
+        /* ── Horizon line ─────────────────────────────── */
+        #horizon-line {
+            position: fixed;
+            left: 0;
+            width: 100vw;
+            height: 0.5px;
+            background: #111;
+            opacity: 0;
+            pointer-events: none;
+            transform: scaleX(0);
+            transform-origin: center center;
+            will-change: transform, opacity;
+        }
+
+        /* ── Hero ─────────────────────────────────────── */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in {
+            opacity: 0;
+            animation: fadeIn 1.5s ease-out forwards;
+        }
+
+        .fade-in-delay {
+            opacity: 0;
+            animation: fadeIn 1.5s ease-out 0.3s forwards;
+        }
+
+        .subtext {
+            font-family: 'Inter', sans-serif;
+            font-size: 10px;
+            font-weight: 300;
+            text-transform: uppercase;
+            letter-spacing: 0.4em;
+            color: #888;
+            line-height: 1;
+            margin-top: 24px;
+        }
+
+        #hero-svg {
+            overflow: visible;
+            display: block;
+            margin: 0 auto;
+        }
+
+        #period-group {
+            cursor: crosshair;
+        }
+
+        /* ── Hidden cursor echo (empty-space easter egg) ── */
+        #cursor-echo {
+            position: fixed;
+            pointer-events: none;
+            opacity: 0;
+            will-change: transform, opacity;
+        }
+
+        .echo-ring {
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            border: 0.5px solid rgba(150, 150, 150, 0.15);
+            border-radius: 50%;
+            left: -11px;
+            top: -11px;
+        }
+
+        .echo-h {
+            position: absolute;
+            width: 14px;
+            height: 0.5px;
+            left: -7px;
+            top: 0;
+            background: #00FFFF;
+            opacity: 0.35;
+        }
+
+        .echo-v {
+            position: absolute;
+            height: 14px;
+            width: 0.5px;
+            top: -7px;
+            left: 0;
+            background: #FF00FF;
+            opacity: 0.35;
+        }
+
+        .echo-coord {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            font: 300 7px 'Inter', sans-serif;
+            color: #aaa;
+            letter-spacing: 0.08em;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="particle-canvas"></canvas>
+    <div id="grid-overlay"></div>
+    <div id="horizon-line"></div>
+
+    <div id="cursor-echo">
+        <div class="echo-ring"></div>
+        <div class="echo-h"></div>
+        <div class="echo-v"></div>
+        <span class="echo-coord"></span>
+    </div>
+
+    <main class="flex items-center justify-center w-screen h-screen select-none" style="position:relative;z-index:1">
+        <div id="hero-wrapper" class="text-center fade-in">
+            <svg id="hero-svg" role="img" aria-label="Parallax Inc."></svg>
+            <p class="subtext fade-in-delay">A New Perspective.</p>
+        </div>
+    </main>
+
+    <script>
+        (() => {
+            'use strict';
+
+            /* ═══════════════════════════════════════════════
+               UTILITIES
+               ═══════════════════════════════════════════════ */
+            function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+
+            /* ═══════════════════════════════════════════════
+               SVG HELPERS
+               ═══════════════════════════════════════════════ */
+            const NS = 'http://www.w3.org/2000/svg';
+            const svg = document.getElementById('hero-svg');
+            const FS = 72;
+            const TXT = 'Parallax Inc';
+            const FILL = '#111111';
+
+            function mkEl(tag, a = {}) {
+                const e = document.createElementNS(NS, tag);
+                for (const [k, v] of Object.entries(a)) e.setAttribute(k, String(v));
+                return e;
+            }
+            const txtAttrs = {
+                'font-family': "'Playfair Display', serif",
+                'font-size': FS, 'font-weight': 400,
+                'letter-spacing': '-0.02em', fill: FILL
+            };
+
+            /* ═══════════════════════════════════════════════
+               SPRING
+               ═══════════════════════════════════════════════ */
+            class Spring {
+                constructor(k = 300, d = 20) {
+                    this.k = k; this.d = d;
+                    this.px = 0; this.py = 0;
+                    this.vx = 0; this.vy = 0;
+                    this.tx = 0; this.ty = 0;
+                }
+                aim(x, y) { this.tx = x; this.ty = y; }
+                tick(dt) {
+                    this.vx += (-this.k * (this.px - this.tx) - this.d * this.vx) * dt;
+                    this.vy += (-this.k * (this.py - this.ty) - this.d * this.vy) * dt;
+                    this.px += this.vx * dt; this.py += this.vy * dt;
+                }
+            }
+
+            /* ═══════════════════════════════════════════════
+               SHARED MOUSE STATE
+               ═══════════════════════════════════════════════ */
+            const mouse = { nx: 0, ny: 0, clientX: 0, clientY: 0, svgX: 0, svgY: 0, inEmpty: false };
+            const mobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+            if (!mobile) {
+                document.addEventListener('mousemove', e => {
+                    mouse.clientX = e.clientX;
+                    mouse.clientY = e.clientY;
+                    mouse.nx = e.clientX / window.innerWidth - 0.5;
+                    mouse.ny = e.clientY / window.innerHeight - 0.5;
+                    mouse.inEmpty = !e.target.closest('svg') && !e.target.closest('.subtext');
+                    // Flashlight tracking on grid
+                    document.getElementById('grid-overlay').style.setProperty('--mx', e.clientX + 'px');
+                    document.getElementById('grid-overlay').style.setProperty('--my', e.clientY + 'px');
+                });
+            }
+
+            /* ═══════════════════════════════════════════════
+               FLOATING PARTICLES
+               ═══════════════════════════════════════════════ */
+            function initParticles() {
+                const cvs = document.getElementById('particle-canvas');
+                const ctx = cvs.getContext('2d');
+                let w, h;
+
+                function resize() {
+                    w = cvs.width = window.innerWidth;
+                    h = cvs.height = window.innerHeight;
+                }
+                resize();
+                window.addEventListener('resize', resize);
+
+                const N = 12;
+                const pts = [];
+                for (let i = 0; i < N; i++) {
+                    pts.push({
+                        x: Math.random() * (w || 1400),
+                        y: Math.random() * (h || 900),
+                        vx: (Math.random() - 0.5) * 0.15,
+                        vy: -Math.random() * 0.1 - 0.02,
+                        alpha: Math.random() * 0.3 + 0.15,
+                        size: Math.random() < 0.3 ? 2 : 1
+                    });
+                }
+
+                (function tick() {
+                    ctx.clearRect(0, 0, w, h);
+                    for (const p of pts) {
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        if (p.x < -10) p.x = w + 10;
+                        if (p.x > w + 10) p.x = -10;
+                        if (p.y < -10) p.y = h + 10;
+                        if (p.y > h + 10) p.y = -10;
+                        ctx.globalAlpha = p.alpha;
+                        ctx.fillStyle = '#777';
+                        ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
+                    }
+                    ctx.globalAlpha = 1;
+                    requestAnimationFrame(tick);
+                })();
+            }
+
+            /* ═══════════════════════════════════════════════
+               BUILD
+               ═══════════════════════════════════════════════ */
+            document.fonts.ready.then(() => requestAnimationFrame(build));
+
+            function build() {
+                /* ── Phase 1: off-screen, measure, set viewBox ── */
+                svg.setAttribute('viewBox', '0 0 3000 300');
+                svg.style.position = 'absolute'; svg.style.left = '-9999px';
+
+                const baseY = FS + 50;
+                const baseText = mkEl('text', { ...txtAttrs, x: 100, y: baseY, id: 'text-base' });
+                baseText.textContent = TXT;
+                svg.appendChild(baseText);
+
+                const bb = baseText.getBBox();
+                const dotR = FS * 0.058;
+                const roughLast = baseText.getExtentOfChar(TXT.length - 1);
+                const roughDotCx = roughLast.x + roughLast.width + FS * 0.08 + dotR;
+                const pad = 20;
+                const vbX = bb.x - pad;
+                const vbY = bb.y - pad;
+                const vbW = (roughDotCx + dotR + pad) - vbX;
+                const vbH = bb.height + pad * 2;
+                svg.setAttribute('viewBox', `${vbX} ${vbY} ${vbW} ${vbH}`);
+
+                svg.removeAttribute('style');
+                svg.style.overflow = 'visible';
+                svg.style.display = 'block';
+                svg.style.margin = '0 auto';
+                svg.style.width = '60vw';
+                svg.style.maxWidth = '700px';
+                svg.style.height = 'auto';
+
+                /* ── Phase 2: on-screen measurements & full assembly ── */
+                requestAnimationFrame(() => {
+                    const pE = baseText.getExtentOfChar(0);
+                    const iE = baseText.getExtentOfChar(9);
+                    const xE = baseText.getExtentOfChar(7);
+                    const lastE = baseText.getExtentOfChar(TXT.length - 1);
+                    const bbLive = baseText.getBBox();
+
+                    const plxBounds = {
+                        x: pE.x, y: pE.y,
+                        width: (xE.x + xE.width) - pE.x,
+                        height: pE.height,
+                        centerY: pE.y + pE.height / 2
+                    };
+
+                    const svgRect = svg.getBoundingClientRect();
+                    const pxToSvg = svg.viewBox.baseVal.width / svgRect.width;
+                    const baseOff = 10 * pxToSvg;
+                    const metaFS = 6 * pxToSvg;
+                    const metaGap = 6 * pxToSvg;
+
+                    /* ── Defs: clip-path + sphere gradients ── */
+                    const clipM = 4, clipI = 1;
+                    const oX = vbX - pad, oY = vbY - pad;
+                    const oW = vbW + pad * 4, oH = vbH + pad * 4;
+                    const defs = mkEl('defs', {});
+
+                    // Clip-path for P & I
+                    const cp = mkEl('clipPath', { id: 'clip-hide-PI' });
+                    const pClipX = pE.x - clipM, pClipW = pE.width + clipM + clipI;
+                    const iClipX = iE.x - clipI, iClipW = iE.width + clipI + clipM;
+                    const clipEl = mkEl('path', {
+                        'clip-rule': 'evenodd',
+                        d: `M${oX},${oY} h${oW} v${oH} h${-oW}Z ` +
+                            `M${pClipX},${pE.y - clipM} v${pE.height + clipM * 2} h${pClipW} v${-(pE.height + clipM * 2)}Z ` +
+                            `M${iClipX},${iE.y - clipM} v${iE.height + clipM * 2} h${iClipW} v${-(iE.height + clipM * 2)}Z`
+                    });
+                    cp.appendChild(clipEl);
+                    defs.appendChild(cp);
+
+                    // Sphere 3D gradient (highlight offset for faux-3D)
+                    const sphereGrad = mkEl('radialGradient', { id: 'sphere-grad', cx: '0.38', cy: '0.35', r: '0.65' });
+                    [['0%', '#666'], ['35%', '#444'], ['70%', '#222'], ['100%', '#0D0D0D']].forEach(([o, c]) => {
+                        sphereGrad.appendChild(mkEl('stop', { offset: o, 'stop-color': c }));
+                    });
+                    defs.appendChild(sphereGrad);
+
+                    // Sphere glow gradient
+                    const glowGrad = mkEl('radialGradient', { id: 'sphere-glow-grad' });
+                    glowGrad.appendChild(mkEl('stop', { offset: '0%', 'stop-color': '#555', 'stop-opacity': '0.12' }));
+                    glowGrad.appendChild(mkEl('stop', { offset: '100%', 'stop-color': '#555', 'stop-opacity': '0' }));
+                    defs.appendChild(glowGrad);
+
+                    svg.insertBefore(defs, svg.firstChild);
+                    baseText.setAttribute('clip-path', 'url(#clip-hide-PI)');
+
+                    /* ── Echo layers ── */
+                    const echoAttrs = { ...txtAttrs, 'pointer-events': 'none', opacity: 0 };
+                    const echoCyan = mkEl('text', { ...echoAttrs, fill: '#00FFFF', x: 100, y: baseY });
+                    echoCyan.textContent = 'Parallax';
+                    svg.insertBefore(echoCyan, baseText);
+                    const echoMagenta = mkEl('text', { ...echoAttrs, fill: '#FF00FF', x: 100, y: baseY });
+                    echoMagenta.textContent = 'Parallax';
+                    svg.insertBefore(echoMagenta, baseText);
+
+                    /* ── Movable P ── */
+                    const gP = mkEl('g', { id: 'letter-P' });
+                    const tP = mkEl('text', { ...txtAttrs, x: pE.x, y: baseY });
+                    tP.textContent = 'P'; gP.appendChild(tP); svg.appendChild(gP);
+
+                    /* ── Movable I ── */
+                    const gI = mkEl('g', { id: 'letter-I' });
+                    const tI = mkEl('text', { ...txtAttrs, x: iE.x, y: baseY });
+                    tI.textContent = 'I'; gI.appendChild(tI); svg.appendChild(gI);
+
+                    /* ── Period group (with sphere + reticle) ── */
+                    const dotCx = lastE.x + lastE.width + FS * 0.08 + dotR;
+                    const dotCy = bbLive.y + bbLive.height - dotR * 1.1;
+                    const expandedR = dotR * 12;
+
+                    const pg = mkEl('g', { id: 'period-group' });
+
+                    // Sphere glow & body (behind period circles)
+                    const sphereGlow = mkEl('circle', {
+                        cx: dotCx, cy: dotCy, r: 0,
+                        fill: 'url(#sphere-glow-grad)', opacity: 0, 'pointer-events': 'none'
+                    });
+                    const sphereBody = mkEl('circle', {
+                        cx: dotCx, cy: dotCy, r: 0,
+                        fill: 'url(#sphere-grad)', opacity: 0, 'pointer-events': 'none'
+                    });
+
+                    // Period circles
+                    const cC = mkEl('circle', { cx: dotCx, cy: dotCy, r: dotR, fill: '#00FFFF', opacity: 0.6 });
+                    const mC = mkEl('circle', { cx: dotCx, cy: dotCy, r: dotR, fill: '#FF00FF', opacity: 0.6 });
+                    const nC = mkEl('circle', { cx: dotCx, cy: dotCy, r: dotR, fill: FILL });
+
+                    // Reticle group (centered at dot, all coords relative to 0,0)
+                    const reticleG = mkEl('g', { opacity: 0, 'pointer-events': 'none' });
+
+                    const rRad = expandedR * 0.82;
+                    const reticleRing = mkEl('circle', {
+                        cx: 0, cy: 0, r: rRad,
+                        fill: 'none', stroke: '#555', 'stroke-width': 0.3, 'stroke-dasharray': '1.5 3'
+                    });
+                    const reticleH = mkEl('line', {
+                        x1: -rRad, y1: 0, x2: rRad, y2: 0,
+                        stroke: '#444', 'stroke-width': 0.15
+                    });
+                    const reticleV = mkEl('line', {
+                        x1: 0, y1: -rRad, x2: 0, y2: rRad,
+                        stroke: '#444', 'stroke-width': 0.15
+                    });
+
+                    // Tick marks at cardinal points
+                    const tickLen = expandedR * 0.06;
+                    const ticks = [];
+                    for (let i = 0; i < 4; i++) {
+                        const a = i * Math.PI / 2;
+                        const r1 = rRad - tickLen, r2 = rRad + tickLen;
+                        const t = mkEl('line', {
+                            x1: Math.cos(a) * r1, y1: Math.sin(a) * r1,
+                            x2: Math.cos(a) * r2, y2: Math.sin(a) * r2,
+                            stroke: '#555', 'stroke-width': 0.25
+                        });
+                        ticks.push(t);
+                    }
+
+                    // Inner ring (concentric detail)
+                    const innerRing = mkEl('circle', {
+                        cx: 0, cy: 0, r: rRad * 0.45,
+                        fill: 'none', stroke: '#333', 'stroke-width': 0.15, 'stroke-dasharray': '1 2.5'
+                    });
+
+                    // Cursor crosshair (moves with mouse inside sphere)
+                    const cursorG = mkEl('g', {});
+                    const curLen = dotR * 2.5;
+                    const cursorH = mkEl('line', {
+                        x1: -curLen, y1: 0, x2: curLen, y2: 0,
+                        stroke: '#00FFFF', 'stroke-width': 0.35, opacity: 0.8
+                    });
+                    const cursorV = mkEl('line', {
+                        x1: 0, y1: -curLen, x2: 0, y2: curLen,
+                        stroke: '#FF00FF', 'stroke-width': 0.35, opacity: 0.8
+                    });
+                    const cursorDot = mkEl('circle', {
+                        cx: 0, cy: 0, r: dotR * 0.4,
+                        fill: 'none', stroke: '#fff', 'stroke-width': 0.2, opacity: 0.4
+                    });
+                    cursorG.append(cursorH, cursorV, cursorDot);
+
+                    reticleG.append(reticleRing, reticleH, reticleV, innerRing, ...ticks, cursorG);
+
+                    pg.append(sphereGlow, sphereBody, cC, mC, nC, reticleG);
+                    svg.appendChild(pg);
+
+                    // Period hover hit area (larger than visible dot for usability)
+                    const dotHitR = 18 * pxToSvg;
+                    const dotHit = mkEl('circle', {
+                        cx: dotCx, cy: dotCy, r: dotHitR,
+                        fill: 'transparent', cursor: 'crosshair', 'pointer-events': 'all'
+                    });
+                    svg.appendChild(dotHit);
+
+                    /* ── Metadata ── */
+                    const metaAttrs = {
+                        'font-family': "'Inter', sans-serif", 'font-size': metaFS,
+                        'font-weight': 300, 'letter-spacing': '0.12em',
+                        fill: '#999', 'pointer-events': 'none'
+                    };
+                    const metaTopG = mkEl('g', { opacity: 0 });
+                    const metaTopText = mkEl('text', { ...metaAttrs, x: plxBounds.x, y: plxBounds.y - metaGap });
+                    metaTopText.textContent = 'OPTICAL DISPLACEMENT: 0.04ms  ·  DEPTH FIELD: 72pt  ·  LAYER: 01';
+                    metaTopG.appendChild(metaTopText); svg.appendChild(metaTopG);
+
+                    const metaBottomG = mkEl('g', { opacity: 0 });
+                    const metaBottomText = mkEl('text', { ...metaAttrs, x: plxBounds.x, y: plxBounds.y + plxBounds.height + metaGap + metaFS });
+                    metaBottomText.textContent = 'PERSPECTIVE SHIFT: ACTIVE  ·  DELAMINATION: 0.02°  ·  REF: PLX—2025';
+                    metaBottomG.appendChild(metaBottomText); svg.appendChild(metaBottomG);
+
+                    /* ── Parallax hit area ── */
+                    const hitPad = 6;
+                    const hitArea = mkEl('rect', {
+                        x: plxBounds.x - hitPad, y: plxBounds.y - hitPad,
+                        width: plxBounds.width + hitPad * 2, height: plxBounds.height + hitPad * 2,
+                        fill: 'transparent', 'pointer-events': 'all'
+                    });
+                    svg.appendChild(hitArea);
+
+                    /* ── Position horizon line ── */
+                    const horizonLine = document.getElementById('horizon-line');
+                    function positionHorizon() {
+                        const r = svg.getBoundingClientRect();
+                        const vb = svg.viewBox.baseVal;
+                        const sc = r.width / vb.width;
+                        horizonLine.style.top = (r.top + (plxBounds.centerY - vb.y) * sc) + 'px';
+                    }
+                    setTimeout(positionHorizon, 1600);
+                    window.addEventListener('resize', positionHorizon);
+
+                    /* ── Init particles ── */
+                    initParticles();
+
+                    /* ── Start interaction ── */
+                    startInteraction({
+                        letters: { gP, gI },
+                        dot: { cC, mC, nC, dotCx, dotCy, dotR, pg, dotHit },
+                        echoes: { echoCyan, echoMagenta, baseOff },
+                        meta: { metaTopG, metaBottomG, metaSlide: baseOff * 0.6 },
+                        sphere: { body: sphereBody, glow: sphereGlow, grad: sphereGrad, expandedR, reticleG, cursorG, pxToSvg },
+                        hitArea, horizonLine
+                    });
+                });
+            }
+
+            /* ═══════════════════════════════════════════════
+               INTERACTION LOOP
+               ═══════════════════════════════════════════════ */
+            function startInteraction(cfg) {
+                const { letters, dot, echoes, meta, sphere, hitArea, horizonLine } = cfg;
+                const gridOverlay = document.getElementById('grid-overlay');
+                const heroWrapper = document.getElementById('hero-wrapper');
+
+                /* ── Springs: original (P, I, period delamination) ── */
+                const sP = new Spring(300, 20);
+                const sI = new Spring(300, 20);
+                const sCyan = new Spring(300, 20);
+                const sMag = new Spring(300, 20);
+
+                /* ── Springs: exploded view (stiffness 150, damping 25) ── */
+                const sOpen = new Spring(150, 25);
+                const sEchoCyanPx = new Spring(150, 25);
+                const sEchoMagPx = new Spring(150, 25);
+
+                /* ── Springs: kinetic fullstop (sphere, cursor, shiver) ── */
+                const sDotExpand = new Spring(150, 25);
+                const sCursor = new Spring(200, 22);
+                const sShiver = new Spring(150, 25);
+
+                /* ── Springs: cursor echo (easter egg) ── */
+                const sCursorEcho = new Spring(80, 12);   // lazy floaty follow
+                const sEchoShow = new Spring(150, 25);    // visibility spring
+                const echoEl = document.getElementById('cursor-echo');
+                const coordSpan = echoEl.querySelector('.echo-coord');
+
+                /* ── Hover states ── */
+                let parallaxHovered = false;
+                hitArea.addEventListener('mouseenter', () => { parallaxHovered = true; });
+                hitArea.addEventListener('mouseleave', () => { parallaxHovered = false; });
+
+                let dotDirectHover = false;
+                dot.dotHit.addEventListener('mouseenter', () => { dotDirectHover = true; });
+                dot.dotHit.addEventListener('mouseleave', () => { dotDirectHover = false; });
+
+                /* ── Period screen distance (updated in mousemove) ── */
+                let dotScreenDist = Infinity;
+
+                /* ── SVG scale ── */
+                function svgScale() {
+                    const r = svg.getBoundingClientRect();
+                    const vb = svg.viewBox.baseVal;
+                    return r.width > 0 ? vb.width / r.width : 1;
+                }
+
+                /* ── Desktop: mouse tracking ── */
+                if (!mobile) {
+                    document.addEventListener('mousemove', e => {
+                        const vw = window.innerWidth, vh = window.innerHeight;
+                        const mx = e.clientX / vw - 0.5;
+                        const my = e.clientY / vh - 0.5;
+                        const sc = svgScale();
+                        const offX = -mx * vw * 0.02 * sc;
+                        const offY = -my * vh * 0.02 * sc;
+                        sP.aim(offX, offY);
+                        sI.aim(offX, offY);
+
+                        // SVG coordinate conversion
+                        const ctm = svg.getScreenCTM();
+                        if (!ctm) return;
+                        const pt = svg.createSVGPoint();
+                        pt.x = e.clientX; pt.y = e.clientY;
+                        const sp = pt.matrixTransform(ctm.inverse());
+                        mouse.svgX = sp.x;
+                        mouse.svgY = sp.y;
+
+                        // Period screen distance
+                        const dotScrX = dot.dotCx * ctm.a + ctm.e;
+                        const dotScrY = dot.dotCy * ctm.d + ctm.f;
+                        dotScreenDist = Math.hypot(e.clientX - dotScrX, e.clientY - dotScrY);
+
+                        // Period delamination
+                        const dx = sp.x - dot.dotCx, dy = sp.y - dot.dotCy;
+                        const dist = Math.hypot(dx, dy);
+                        const zone = dot.dotR * 25;
+                        if (dist < zone && dist > 0.01) {
+                            const intensity = Math.pow(1 - dist / zone, 1.5);
+                            const maxOff = dot.dotR * 5;
+                            const nx = dx / dist, ny = dy / dist;
+                            sCyan.aim(-nx * intensity * maxOff, -ny * intensity * maxOff);
+                            sMag.aim(nx * intensity * maxOff, ny * intensity * maxOff);
+                        } else {
+                            sCyan.aim(0, 0); sMag.aim(0, 0);
+                        }
+                    });
+                }
+
+                /* ── Mobile: gyroscope ── */
+                if (mobile) {
+                    function onOrientation(e) {
+                        const gamma = e.gamma || 0;
+                        const beta = (e.beta || 45) - 45;
+                        const sc = svgScale();
+                        const f = 0.3 * sc;
+                        sP.aim(-gamma * f, -beta * f);
+                        sI.aim(-gamma * f, -beta * f);
+                        sCyan.aim(-gamma * 0.1, -beta * 0.1);
+                        sMag.aim(gamma * 0.1, beta * 0.1);
+                    }
+                    if (typeof DeviceOrientationEvent !== 'undefined' &&
+                        typeof DeviceOrientationEvent.requestPermission === 'function') {
+                        document.addEventListener('touchstart', function once() {
+                            DeviceOrientationEvent.requestPermission().then(r => {
+                                if (r === 'granted') window.addEventListener('deviceorientation', onOrientation);
+                            });
+                            document.removeEventListener('touchstart', once);
+                        }, { once: true });
+                    } else {
+                        window.addEventListener('deviceorientation', onOrientation);
+                    }
+                }
+
+                /* ═══ RENDER LOOP ═══ */
+                let prev = performance.now();
+
+                (function loop(now) {
+                    const dt = Math.min((now - prev) / 1000, 0.05);
+                    prev = now;
+
+                    // ── Tick springs ──
+                    sP.tick(dt); sI.tick(dt); sCyan.tick(dt); sMag.tick(dt);
+                    sOpen.tick(dt); sEchoCyanPx.tick(dt); sEchoMagPx.tick(dt);
+                    sDotExpand.tick(dt); sCursor.tick(dt); sShiver.tick(dt);
+                    sCursorEcho.tick(dt); sEchoShow.tick(dt);
+
+                    // ──────────────────────────────────────
+                    //  PERIOD: KINETIC FULLSTOP
+                    // ──────────────────────────────────────
+                    const vibeIntensity = dotScreenDist < 50 ? clamp01(1 - dotScreenDist / 50) : 0;
+                    sDotExpand.aim(0, dotDirectHover ? 1 : 0);
+                    sShiver.aim(0, dotDirectHover ? 1 : 0);
+                    const expand = clamp01(sDotExpand.py);
+                    const shiver = clamp01(sShiver.py);
+
+                    // Vibration jitter (high-frequency, 0.5px)
+                    if (vibeIntensity > 0.005) {
+                        const amp = dot.dotR * 0.09 * vibeIntensity;
+                        const jx = (Math.random() - 0.5) * 2 * amp;
+                        const jy = (Math.random() - 0.5) * 2 * amp;
+                        dot.pg.setAttribute('transform', `translate(${jx},${jy})`);
+                    } else if (expand < 0.01) {
+                        dot.pg.setAttribute('transform', '');
+                    }
+
+                    // Sphere expansion
+                    const curR = dot.dotR + (sphere.expandedR - dot.dotR) * expand;
+                    sphere.body.setAttribute('r', curR);
+                    sphere.body.setAttribute('opacity', expand * 0.95);
+                    sphere.glow.setAttribute('r', curR * 1.6);
+                    sphere.glow.setAttribute('opacity', expand * 0.5);
+
+                    // Sphere 3D highlight follows mouse
+                    if (expand > 0.05) {
+                        const relX = (mouse.svgX - dot.dotCx) / sphere.expandedR;
+                        const relY = (mouse.svgY - dot.dotCy) / sphere.expandedR;
+                        sphere.grad.setAttribute('cx', (0.38 + clamp01(relX * 0.15 + 0.5) * 0.2 - 0.1).toFixed(3));
+                        sphere.grad.setAttribute('cy', (0.35 + clamp01(relY * 0.15 + 0.5) * 0.2 - 0.1).toFixed(3));
+                    }
+
+                    // Period circles expand with sphere
+                    const cyanR = dot.dotR + (sphere.expandedR * 0.9 - dot.dotR) * expand;
+                    const magR = dot.dotR + (sphere.expandedR * 0.9 - dot.dotR) * expand;
+                    dot.cC.setAttribute('r', cyanR);
+                    dot.mC.setAttribute('r', magR);
+                    dot.cC.setAttribute('opacity', 0.6 - expand * 0.45);
+                    dot.mC.setAttribute('opacity', 0.6 - expand * 0.45);
+                    dot.nC.setAttribute('opacity', 1 - expand * 0.6);
+
+                    // Reticle
+                    const reticleOpacity = expand > 0.35 ? (expand - 0.35) / 0.65 : 0;
+                    sphere.reticleG.setAttribute('opacity', reticleOpacity);
+                    sphere.reticleG.setAttribute('transform', `translate(${dot.dotCx},${dot.dotCy}) scale(${Math.max(0.01, expand)})`);
+
+                    // Reticle cursor tracking (spring-smoothed)
+                    if (expand > 0.1) {
+                        const dx = mouse.svgX - dot.dotCx;
+                        const dy = mouse.svgY - dot.dotCy;
+                        const d = Math.hypot(dx, dy);
+                        const maxR = sphere.expandedR * 0.7;
+                        const clampD = Math.min(d, maxR);
+                        const cx = d > 0.01 ? (dx / d) * clampD / Math.max(expand, 0.1) : 0;
+                        const cy = d > 0.01 ? (dy / d) * clampD / Math.max(expand, 0.1) : 0;
+                        sCursor.aim(cx, cy);
+                    } else {
+                        sCursor.aim(0, 0);
+                    }
+                    sphere.cursorG.setAttribute('transform', `translate(${sCursor.px},${sCursor.py})`);
+
+                    // Text shiver (whole hero trembles when period is "activated")
+                    if (shiver > 0.01) {
+                        const freq = now * 0.05;
+                        const sx = Math.sin(freq * 7.1) * 0.35 * shiver;
+                        const sy = Math.cos(freq * 5.3) * 0.25 * shiver;
+                        heroWrapper.style.transform = `translate(${sx}px,${sy}px)`;
+                    } else {
+                        heroWrapper.style.transform = '';
+                    }
+
+                    // ──────────────────────────────────────
+                    //  P / I / PERIOD DELAMINATION
+                    // ──────────────────────────────────────
+                    letters.gP.setAttribute('transform', `translate(${sP.px},${sP.py})`);
+                    letters.gI.setAttribute('transform', `translate(${sI.px},${sI.py})`);
+                    dot.cC.setAttribute('transform', `translate(${sCyan.px},${sCyan.py})`);
+                    dot.mC.setAttribute('transform', `translate(${sMag.px},${sMag.py})`);
+
+                    // ──────────────────────────────────────
+                    //  EXPLODED VIEW (Parallax hover)
+                    // ──────────────────────────────────────
+                    sOpen.aim(0, parallaxHovered ? 1 : 0);
+
+                    const pxFactor = FS * 0.22;
+                    const pxFactorSmall = FS * 0.10;
+                    if (parallaxHovered) {
+                        sEchoCyanPx.aim(mouse.nx * pxFactor, mouse.ny * pxFactor * 0.6);
+                        sEchoMagPx.aim(-mouse.nx * pxFactorSmall, -mouse.ny * pxFactorSmall * 0.6);
+                    } else {
+                        sEchoCyanPx.aim(0, 0);
+                        sEchoMagPx.aim(0, 0);
+                    }
+
+                    const open = clamp01(sOpen.py);
+
+                    const cyanTx = sEchoCyanPx.px * open;
+                    const cyanTy = -echoes.baseOff * open + sEchoCyanPx.py * open;
+                    echoes.echoCyan.setAttribute('transform', `translate(${cyanTx},${cyanTy})`);
+                    echoes.echoCyan.setAttribute('opacity', open * 0.2);
+
+                    const magTx = sEchoMagPx.px * open;
+                    const magTy = echoes.baseOff * open + sEchoMagPx.py * open;
+                    echoes.echoMagenta.setAttribute('transform', `translate(${magTx},${magTy})`);
+                    echoes.echoMagenta.setAttribute('opacity', open * 0.2);
+
+                    horizonLine.style.opacity = open * 0.5;
+                    horizonLine.style.transform = `scaleX(${open})`;
+
+                    meta.metaTopG.setAttribute('opacity', open);
+                    meta.metaTopG.setAttribute('transform', `translate(0,${-meta.metaSlide * open})`);
+                    meta.metaBottomG.setAttribute('opacity', open);
+                    meta.metaBottomG.setAttribute('transform', `translate(0,${meta.metaSlide * open})`);
+
+                    // Grid: always visible, boost on Parallax hover
+                    gridOverlay.style.opacity = 1 + open * 0.5;
+
+                    // ──────────────────────────────────────
+                    //  CURSOR ECHO (empty-space easter egg)
+                    // ──────────────────────────────────────
+                    sCursorEcho.aim(mouse.clientX, mouse.clientY);
+                    sEchoShow.aim(0, mouse.inEmpty ? 1 : 0);
+                    const echoVis = clamp01(sEchoShow.py);
+                    echoEl.style.opacity = echoVis;
+                    echoEl.style.transform = `translate(${sCursorEcho.px}px,${sCursorEcho.py}px)`;
+                    if (echoVis > 0.01) {
+                        coordSpan.textContent = `${Math.round(mouse.clientX)}, ${Math.round(mouse.clientY)}`;
+                    }
+
+                    requestAnimationFrame(loop);
+                })(prev);
+            }
+        })();
+    </script>
+</body>
+
+</html>
