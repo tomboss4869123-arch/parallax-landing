@@ -6,7 +6,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Parallax.</title>
     <meta name="description" content="Parallax. — Soon." />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23111'/%3E%3Ctext x='7' y='24' font-family='system-ui,sans-serif' font-size='24' font-weight='400' fill='%23F9F9F9' letter-spacing='-0.04em'%3EP%3C/text%3E%3Ctext x='8.5' y='24' font-family='system-ui,sans-serif' font-size='24' font-weight='400' fill='%2300FFFF' opacity='0.4' letter-spacing='-0.04em'%3EP%3C/text%3E%3Ctext x='5.5' y='24' font-family='system-ui,sans-serif' font-size='24' font-weight='400' fill='%23FF00FF' opacity='0.4' letter-spacing='-0.04em'%3EP%3C/text%3E%3Ccircle cx='23' cy='22' r='2.5' fill='%23F9F9F9'/%3E%3Ccircle cx='23.8' cy='22' r='2.5' fill='%2300FFFF' opacity='0.5'/%3E%3Ccircle cx='22.2' cy='22' r='2.5' fill='%23FF00FF' opacity='0.5'/%3E%3C/svg%3E" />
+    <script>
+    // Generate favicon via canvas (avoids SVG data URI encoding issues)
+    (function(){
+        var c=document.createElement('canvas');c.width=32;c.height=32;
+        var x=c.getContext('2d');
+        // Dark rounded rect
+        x.fillStyle='#111';x.beginPath();x.roundRect(0,0,32,32,6);x.fill();
+        // Chromatic P layers
+        x.font='400 24px system-ui,sans-serif';x.textBaseline='bottom';
+        x.globalAlpha=0.4;x.fillStyle='#FF00FF';x.fillText('P',5.5,27);
+        x.fillStyle='#00FFFF';x.fillText('P',8.5,27);
+        x.globalAlpha=1;x.fillStyle='#F9F9F9';x.fillText('P',7,27);
+        // Chromatic dot
+        x.globalAlpha=0.5;
+        x.fillStyle='#FF00FF';x.beginPath();x.arc(22.2,23,2.5,0,7);x.fill();
+        x.fillStyle='#00FFFF';x.beginPath();x.arc(23.8,23,2.5,0,7);x.fill();
+        x.globalAlpha=1;x.fillStyle='#F9F9F9';x.beginPath();x.arc(23,23,2.5,0,7);x.fill();
+        // Set as favicon
+        var l=document.createElement('link');l.rel='icon';l.href=c.toDataURL();
+        document.head.appendChild(l);
+    })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
