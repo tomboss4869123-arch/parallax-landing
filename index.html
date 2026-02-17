@@ -120,6 +120,12 @@
             color: #888;
             line-height: 1;
             margin-top: 24px;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+
+        .subtext:hover {
+            color: #555;
         }
 
         #hero-svg {
@@ -179,27 +185,124 @@
             letter-spacing: 0.08em;
             white-space: nowrap;
         }
+
+        /* ── Landing page wrapper (for lens clip-path) ── */
+        #landing-page {
+            will-change: clip-path;
+        }
+
+        /* ── Waitlist page ──────────────────────────── */
+        #waitlist-page {
+            background: #F9F9F9;
+        }
+
+        #waitlist-email:focus {
+            border-color: #111;
+        }
+
+        #waitlist-email::placeholder {
+            color: #bbb;
+        }
+
+        #waitlist-page button[type="submit"]:hover {
+            opacity: 0.8;
+        }
+
+        #waitlist-back {
+            transition: color 0.3s ease;
+        }
+
+        #waitlist-back:hover {
+            color: #111;
+        }
+
+        #waitlist-back:hover svg {
+            stroke: #111;
+        }
     </style>
 </head>
 
 <body>
-    <canvas id="particle-canvas"></canvas>
-    <div id="grid-overlay"></div>
-    <div id="horizon-line"></div>
+    <!-- Landing page (front layer — gets clip-path lens hole) -->
+    <div id="landing-page" style="position:fixed;inset:0;z-index:1">
+        <canvas id="particle-canvas"></canvas>
+        <div id="grid-overlay"></div>
+        <div id="horizon-line"></div>
 
-    <div id="cursor-echo">
-        <div class="echo-ring"></div>
-        <div class="echo-h"></div>
-        <div class="echo-v"></div>
-        <span class="echo-coord"></span>
+        <div id="cursor-echo">
+            <div class="echo-ring"></div>
+            <div class="echo-h"></div>
+            <div class="echo-v"></div>
+            <span class="echo-coord"></span>
+        </div>
+
+        <main class="flex items-center justify-center w-screen h-screen select-none" style="position:relative;z-index:1">
+            <div id="hero-wrapper" class="text-center fade-in">
+                <svg id="hero-svg" role="img" aria-label="Parallax Inc."></svg>
+                <p class="subtext fade-in-delay">A New Perspective.</p>
+            </div>
+        </main>
     </div>
 
-    <main class="flex items-center justify-center w-screen h-screen select-none" style="position:relative;z-index:1">
-        <div id="hero-wrapper" class="text-center fade-in">
-            <svg id="hero-svg" role="img" aria-label="Parallax Inc."></svg>
-            <p class="subtext fade-in-delay">A New Perspective.</p>
+    <!-- Waitlist page (back layer — revealed by lens) -->
+    <section id="waitlist-page"
+        class="fixed inset-0 flex items-center justify-center select-none"
+        style="z-index:0; opacity:0; pointer-events:none;">
+
+        <button id="waitlist-back"
+            class="fixed top-8 left-8 flex items-center gap-2"
+            style="font-family:'Inter',sans-serif; font-size:11px; font-weight:300;
+                   letter-spacing:0.3em; text-transform:uppercase; color:#888;
+                   background:none; border:none; cursor:pointer; padding:8px;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
+                 stroke="#888" stroke-width="0.8">
+                <line x1="10" y1="3" x2="5" y2="8"/>
+                <line x1="5" y1="8" x2="10" y2="13"/>
+            </svg>
+            Back
+        </button>
+
+        <div class="text-center" style="max-width:420px; padding:0 24px;">
+            <h2 id="waitlist-heading" style="font-family:'Playfair Display',serif; font-size:42px;
+                        font-weight:400; color:#111; letter-spacing:-0.02em;
+                        line-height:1.15; margin-bottom:12px;">
+                Join the Waitlist
+            </h2>
+
+            <p style="font-family:'Inter',sans-serif; font-size:13px; font-weight:300;
+                      color:#888; letter-spacing:0.05em; line-height:1.6;
+                      margin-bottom:36px;">
+                A new perspective — soon.
+            </p>
+
+            <form id="waitlist-form" autocomplete="off"
+                  style="display:flex; flex-direction:column; gap:14px; align-items:center;">
+
+                <input id="waitlist-email" type="email" placeholder="you@example.com"
+                    required
+                    style="width:100%; max-width:340px; padding:12px 16px;
+                           font-family:'Inter',sans-serif; font-size:13px; font-weight:300;
+                           letter-spacing:0.03em; color:#111; background:transparent;
+                           border:0.5px solid #ccc; border-radius:0;
+                           outline:none; transition:border-color 0.3s ease;" />
+
+                <button type="submit"
+                    style="width:100%; max-width:340px; padding:12px 16px;
+                           font-family:'Inter',sans-serif; font-size:11px; font-weight:400;
+                           letter-spacing:0.3em; text-transform:uppercase;
+                           color:#F9F9F9; background:#111; border:none;
+                           cursor:pointer; transition:opacity 0.3s ease;">
+                    Request Access
+                </button>
+            </form>
+
+            <p id="waitlist-success"
+               style="display:none; font-family:'Inter',sans-serif; font-size:13px;
+                      font-weight:300; color:#888; letter-spacing:0.05em; margin-top:24px;">
+                We'll be in touch.
+            </p>
         </div>
-    </main>
+    </section>
 
     <script>
         (() => {
@@ -592,6 +695,64 @@
                 const echoEl = document.getElementById('cursor-echo');
                 const coordSpan = echoEl.querySelector('.echo-coord');
 
+                /* ── Springs: lens portal ── */
+                const sLens = new Spring(55, 10);   // slow, dramatic, languid iris
+                const sWaitlistDrift = new Spring(60, 14); // content drifts up
+                const sWaitlistTilt = new Spring(100, 16); // card parallax tilt
+                const sChroma = new Spring(120, 18);       // chromatic aberration on heading
+                let portalOpen = false;
+                let portalClickX = 0;
+                let portalClickY = 0;
+                const landingPage = document.getElementById('landing-page');
+                const waitlistPage = document.getElementById('waitlist-page');
+                const waitlistContent = waitlistPage.querySelector('.text-center');
+                const waitlistHeading = document.getElementById('waitlist-heading');
+                const waitlistBack = document.getElementById('waitlist-back');
+                const waitlistForm = document.getElementById('waitlist-form');
+                const waitlistEmail = document.getElementById('waitlist-email');
+                const waitlistSuccess = document.getElementById('waitlist-success');
+                const subtextEl = document.querySelector('.subtext');
+
+                /* ── Lens portal: click to open ── */
+                subtextEl.addEventListener('click', (e) => {
+                    if (portalOpen) return;
+                    portalOpen = true;
+                    portalClickX = e.clientX;
+                    portalClickY = e.clientY;
+                    sLens.aim(0, 1);
+                    sWaitlistDrift.aim(0, 1);
+                    waitlistPage.style.opacity = '1';
+                    waitlistPage.style.pointerEvents = 'auto';
+                });
+
+                /* ── Lens portal: back button ── */
+                waitlistBack.addEventListener('click', () => {
+                    if (!portalOpen) return;
+                    portalOpen = false;
+                    sLens.aim(0, 0);
+                    sWaitlistDrift.aim(0, 0);
+                    waitlistPage.style.pointerEvents = 'none';
+                    setTimeout(() => {
+                        waitlistEmail.value = '';
+                        waitlistEmail.style.display = '';
+                        waitlistForm.querySelector('button[type="submit"]').style.display = '';
+                        waitlistSuccess.style.display = 'none';
+                    }, 1000);
+                });
+
+                /* ── Lens portal: escape key ── */
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && portalOpen) waitlistBack.click();
+                });
+
+                /* ── Waitlist form submit (visual only) ── */
+                waitlistForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    waitlistEmail.style.display = 'none';
+                    waitlistForm.querySelector('button[type="submit"]').style.display = 'none';
+                    waitlistSuccess.style.display = 'block';
+                });
+
                 /* ── Hover states ── */
                 let parallaxHovered = false;
                 hitArea.addEventListener('mouseenter', () => { parallaxHovered = true; });
@@ -690,6 +851,8 @@
                     sOpen.tick(dt); sEchoCyanPx.tick(dt); sEchoMagPx.tick(dt);
                     sDotExpand.tick(dt); sCursor.tick(dt); sShiver.tick(dt);
                     sCursorEcho.tick(dt); sEchoShow.tick(dt);
+                    sLens.tick(dt); sWaitlistDrift.tick(dt);
+                    sWaitlistTilt.tick(dt); sChroma.tick(dt);
 
                     // ──────────────────────────────────────
                     //  PERIOD: KINETIC FULLSTOP
@@ -820,6 +983,81 @@
                     echoEl.style.transform = `translate(${sCursorEcho.px}px,${sCursorEcho.py}px)`;
                     if (echoVis > 0.01) {
                         coordSpan.textContent = `${Math.round(mouse.clientX)}, ${Math.round(mouse.clientY)}`;
+                    }
+
+                    // ──────────────────────────────────────
+                    //  WAITLIST HOVER EFFECTS
+                    // ──────────────────────────────────────
+                    if (portalOpen) {
+                        // Subtle parallax tilt follows mouse (±8px)
+                        sWaitlistTilt.aim(mouse.nx * 16, mouse.ny * 10);
+                        // Chromatic split follows mouse (±3px)
+                        sChroma.aim(mouse.nx * 6, mouse.ny * 4);
+                    } else {
+                        sWaitlistTilt.aim(0, 0);
+                        sChroma.aim(0, 0);
+                    }
+
+                    // ──────────────────────────────────────
+                    //  LENS PORTAL
+                    // ──────────────────────────────────────
+                    const lensProgress = clamp01(sLens.py);
+                    const driftProgress = clamp01(sWaitlistDrift.py);
+
+                    if (lensProgress > 0.001) {
+                        const vw = window.innerWidth;
+                        const vh = window.innerHeight;
+                        const maxDist = Math.hypot(
+                            Math.max(portalClickX, vw - portalClickX),
+                            Math.max(portalClickY, vh - portalClickY)
+                        );
+                        const maxRadius = maxDist * 1.1;
+                        const radius = maxRadius * (1 - lensProgress);
+
+                        // Clip the landing page iris-style
+                        landingPage.style.clipPath =
+                            `circle(${radius}px at ${portalClickX}px ${portalClickY}px)`;
+
+                        // Subtle zoom on landing as it clips away
+                        const zoom = 1 + lensProgress * 0.04;
+                        landingPage.style.transform = `scale(${zoom})`;
+
+                        // Waitlist fades in
+                        waitlistPage.style.opacity = lensProgress > 0.2
+                            ? Math.min(1, (lensProgress - 0.2) / 0.5)
+                            : 0;
+
+                        // Content drifts up from 30px below + parallax tilt
+                        const drift = 30 * (1 - driftProgress);
+                        const tiltX = sWaitlistTilt.px;
+                        const tiltY = sWaitlistTilt.py;
+                        waitlistContent.style.transform =
+                            `translateY(${drift}px) translate(${tiltX}px,${tiltY}px)`;
+                        waitlistContent.style.opacity = driftProgress;
+
+                        // Chromatic aberration on heading
+                        const cx = sChroma.px;
+                        const cy = sChroma.py;
+                        if (Math.abs(cx) > 0.05 || Math.abs(cy) > 0.05) {
+                            waitlistHeading.style.textShadow =
+                                `${cx}px ${cy}px 0 rgba(0,255,255,0.18), ${-cx}px ${-cy}px 0 rgba(255,0,255,0.18)`;
+                        } else {
+                            waitlistHeading.style.textShadow = '';
+                        }
+                    } else {
+                        landingPage.style.clipPath = '';
+                        landingPage.style.transform = '';
+                        waitlistPage.style.opacity = '0';
+                        waitlistPage.style.pointerEvents = 'none';
+                        waitlistContent.style.transform = '';
+                        waitlistContent.style.opacity = '0';
+                        waitlistHeading.style.textShadow = '';
+                    }
+
+                    if (lensProgress > 0.99) {
+                        landingPage.style.pointerEvents = 'none';
+                    } else {
+                        landingPage.style.pointerEvents = '';
                     }
 
                     requestAnimationFrame(loop);
