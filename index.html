@@ -529,6 +529,7 @@
                     uniform float u_time;
                     uniform vec2 u_mouse;
                     uniform float u_hover;
+                    uniform float u_aspect;
 
                     // Simplex-ish noise
                     float hash(vec2 p) {
@@ -577,8 +578,8 @@
                         b += rim * 0.06;
 
                         // Circular specular highlight follows mouse
-                        float d = length((uv - u_mouse) * vec2(1.0, 2.2));
-                        float spec = smoothstep(0.25, 0.0, d) * 0.35 * u_hover;
+                        float d = length((uv - u_mouse) * vec2(u_aspect, 1.0));
+                        float spec = smoothstep(0.3, 0.0, d) * 0.4 * u_hover;
                         r += spec * 0.9;
                         g += spec * 0.9;
                         b += spec * 1.1;
@@ -609,18 +610,29 @@
                 const uTime = gl.getUniformLocation(prog, 'u_time');
                 const uMouse = gl.getUniformLocation(prog, 'u_mouse');
                 const uHover = gl.getUniformLocation(prog, 'u_hover');
+                const uAspect = gl.getUniformLocation(prog, 'u_aspect');
 
                 let hovered = 0;
                 let hoverTarget = 0;
                 btn.addEventListener('mouseenter', () => { hoverTarget = 1; });
                 btn.addEventListener('mouseleave', () => { hoverTarget = 0; });
+                btn.addEventListener('touchstart', () => { hoverTarget = 1; }, { passive: true });
+                btn.addEventListener('touchend', () => { hoverTarget = 0; }, { passive: true });
+                btn.addEventListener('touchcancel', () => { hoverTarget = 0; }, { passive: true });
 
                 let localMx = 0.5, localMy = 0.5;
-                btn.addEventListener('mousemove', (e) => {
+                function updateGlassPointer(cx, cy) {
                     const r = btn.getBoundingClientRect();
-                    localMx = (e.clientX - r.left) / r.width;
-                    localMy = 1.0 - (e.clientY - r.top) / r.height;
-                });
+                    localMx = (cx - r.left) / r.width;
+                    localMy = 1.0 - (cy - r.top) / r.height;
+                }
+                btn.addEventListener('mousemove', (e) => updateGlassPointer(e.clientX, e.clientY));
+                btn.addEventListener('touchmove', (e) => {
+                    updateGlassPointer(e.touches[0].clientX, e.touches[0].clientY);
+                }, { passive: true });
+                btn.addEventListener('touchstart', (e) => {
+                    updateGlassPointer(e.touches[0].clientX, e.touches[0].clientY);
+                }, { passive: true });
 
                 const t0 = performance.now();
 
@@ -632,6 +644,7 @@
                     gl.uniform1f(uTime, t);
                     gl.uniform2f(uMouse, localMx, localMy);
                     gl.uniform1f(uHover, hovered);
+                    gl.uniform1f(uAspect, canvas.width / canvas.height);
                     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
                     requestAnimationFrame(frame);
@@ -796,22 +809,8 @@
                     const metaFS = 6 * pxToSvg;
                     const metaGap = 6 * pxToSvg;
 
-                    /* ── Defs: clip-path + sphere gradients ── */
-                    const clipM = 4, clipI = 1;
-                    const oX = vbX - pad, oY = vbY - pad;
-                    const oW = vbW + pad * 4, oH = vbH + pad * 4;
+                    /* ── Defs: sphere gradients ── */
                     const defs = mkEl('defs', {});
-
-                    // Clip-path for P
-                    const cp = mkEl('clipPath', { id: 'clip-hide-PI' });
-                    const pClipX = pE.x - clipM, pClipW = pE.width + clipM + clipI;
-                    const clipEl = mkEl('path', {
-                        'clip-rule': 'evenodd',
-                        d: `M${oX},${oY} h${oW} v${oH} h${-oW}Z ` +
-                            `M${pClipX},${pE.y - clipM} v${pE.height + clipM * 2} h${pClipW} v${-(pE.height + clipM * 2)}Z`
-                    });
-                    cp.appendChild(clipEl);
-                    defs.appendChild(cp);
 
                     // Sphere 3D gradient (highlight offset for faux-3D)
                     const sphereGrad = mkEl('radialGradient', { id: 'sphere-grad', cx: '0.38', cy: '0.35', r: '0.65' });
@@ -827,7 +826,7 @@
                     defs.appendChild(glowGrad);
 
                     svg.insertBefore(defs, svg.firstChild);
-                    baseText.setAttribute('clip-path', 'url(#clip-hide-PI)');
+                    baseText.setAttribute('opacity', '0');
 
                     /* ── Echo layers ── */
                     const echoAttrs = { ...txtAttrs, 'pointer-events': 'none', opacity: 0 };
@@ -838,10 +837,19 @@
                     echoMagenta.textContent = 'Parallax';
                     svg.insertBefore(echoMagenta, baseText);
 
-                    /* ── Movable P ── */
-                    const gP = mkEl('g', { id: 'letter-P' });
-                    const tP = mkEl('text', { ...txtAttrs, x: pE.x, y: baseY });
-                    tP.textContent = 'P'; gP.appendChild(tP); svg.appendChild(gP);
+                    /* ── Movable letters (each at different depth) ── */
+                    // Depth multipliers: vary per letter for true parallax
+                    const depths = [1.0, 0.4, 0.7, 0.5, 0.85, 0.55, 0.65, 0.9];
+                    const letterGroups = [];
+                    for (let i = 0; i < TXT.length; i++) {
+                        const charE = baseText.getExtentOfChar(i);
+                        const g = mkEl('g', { id: `letter-${i}` });
+                        const t = mkEl('text', { ...txtAttrs, x: charE.x, y: baseY });
+                        t.textContent = TXT[i];
+                        g.appendChild(t);
+                        svg.appendChild(g);
+                        letterGroups.push({ g, depth: depths[i] });
+                    }
 
                     /* ── Period group (with sphere + reticle) ── */
                     const dotCx = lastE.x + lastE.width + FS * 0.02 + dotR;
@@ -930,7 +938,7 @@
                         cx: dotCx, cy: dotCy, r: dotHitR,
                         fill: 'transparent', cursor: 'crosshair', 'pointer-events': 'all'
                     });
-                    svg.appendChild(dotHit);
+                    pg.appendChild(dotHit);
 
                     /* ── Metadata ── */
                     const metaAttrs = {
@@ -955,7 +963,7 @@
                         width: plxBounds.width + hitPad * 2, height: plxBounds.height + hitPad * 2,
                         fill: 'transparent', 'pointer-events': 'all'
                     });
-                    svg.appendChild(hitArea);
+                    svg.insertBefore(hitArea, pg);
 
                     /* ── Position horizon line ── */
                     const horizonLine = document.getElementById('horizon-line');
@@ -975,7 +983,7 @@
 
                     /* ── Start interaction ── */
                     startInteraction({
-                        letters: { gP },
+                        letterGroups,
                         dot: { cC, mC, nC, dotCx, dotCy, dotR, pg, dotHit },
                         echoes: { echoCyan, echoMagenta, baseOff },
                         meta: { metaTopG, metaBottomG, metaSlide: baseOff * 0.6 },
@@ -989,12 +997,14 @@
                INTERACTION LOOP
                ═══════════════════════════════════════════════ */
             function startInteraction(cfg) {
-                const { letters, dot, echoes, meta, sphere, hitArea, horizonLine } = cfg;
+                const { letterGroups, dot, echoes, meta, sphere, hitArea, horizonLine } = cfg;
                 const gridOverlay = document.getElementById('grid-overlay');
                 const heroWrapper = document.getElementById('hero-wrapper');
 
-                /* ── Springs: original (P, I, period delamination) ── */
-                const sP = new Spring(300, 20);
+                /* ── Springs: per-letter parallax + period delamination ── */
+                const letterSprings = letterGroups.map(() => new Spring(300, 20));
+                const sDot = new Spring(300, 20);   // period parallax (depth 0.95)
+                const DOT_DEPTH = 0.95;
                 const sCyan = new Spring(300, 20);
                 const sMag = new Spring(300, 20);
 
@@ -1108,7 +1118,8 @@
                     const sc = svgScale();
                     const offX = -mx * vw * 0.02 * sc;
                     const offY = -my * vh * 0.02 * sc;
-                    sP.aim(offX, offY);
+                    letterSprings.forEach((s, i) => s.aim(offX * letterGroups[i].depth, offY * letterGroups[i].depth));
+                    sDot.aim(offX * DOT_DEPTH, offY * DOT_DEPTH);
 
                     // SVG coordinate conversion
                     const ctm = svg.getScreenCTM();
@@ -1119,13 +1130,13 @@
                     mouse.svgX = sp.x;
                     mouse.svgY = sp.y;
 
-                    // Period screen distance
-                    const dotScrX = dot.dotCx * ctm.a + ctm.e;
-                    const dotScrY = dot.dotCy * ctm.d + ctm.f;
+                    // Period screen distance (account for parallax offset)
+                    const dotScrX = (dot.dotCx + sDot.px) * ctm.a + ctm.e;
+                    const dotScrY = (dot.dotCy + sDot.py) * ctm.d + ctm.f;
                     dotScreenDist = Math.hypot(cx - dotScrX, cy - dotScrY);
 
-                    // Period delamination
-                    const dx = sp.x - dot.dotCx, dy = sp.y - dot.dotCy;
+                    // Period delamination (account for parallax offset)
+                    const dx = sp.x - (dot.dotCx + sDot.px), dy = sp.y - (dot.dotCy + sDot.py);
                     const dist = Math.hypot(dx, dy);
                     const zone = dot.dotR * 25;
                     if (dist < zone && dist > 0.01) {
@@ -1153,7 +1164,8 @@
                     const beta = (e.beta || 45) - 45;
                     const sc = svgScale();
                     const f = 0.3 * sc;
-                    sP.aim(-gamma * f, -beta * f);
+                    letterSprings.forEach((s, i) => s.aim(-gamma * f * letterGroups[i].depth, -beta * f * letterGroups[i].depth));
+                    sDot.aim(-gamma * f * DOT_DEPTH, -beta * f * DOT_DEPTH);
                     sCyan.aim(-gamma * 0.1, -beta * 0.1);
                     sMag.aim(gamma * 0.1, beta * 0.1);
                 }
@@ -1177,7 +1189,7 @@
                     prev = now;
 
                     // ── Tick springs ──
-                    sP.tick(dt); sCyan.tick(dt); sMag.tick(dt);
+                    letterSprings.forEach(s => s.tick(dt)); sDot.tick(dt); sCyan.tick(dt); sMag.tick(dt);
                     sOpen.tick(dt); sEchoCyanPx.tick(dt); sEchoMagPx.tick(dt);
                     sDotExpand.tick(dt); sCursor.tick(dt); sShiver.tick(dt);
                     sCursorEcho.tick(dt); sEchoShow.tick(dt);
@@ -1193,14 +1205,15 @@
                     const expand = clamp01(sDotExpand.py);
                     const shiver = clamp01(sShiver.py);
 
-                    // Vibration jitter (high-frequency, 0.5px)
-                    if (vibeIntensity > 0.005) {
-                        const amp = dot.dotR * 0.09 * vibeIntensity;
-                        const jx = (Math.random() - 0.5) * 2 * amp;
-                        const jy = (Math.random() - 0.5) * 2 * amp;
+                    // Period parallax + vibration jitter
+                    {
+                        let jx = sDot.px, jy = sDot.py;
+                        if (vibeIntensity > 0.005) {
+                            const amp = dot.dotR * 0.09 * vibeIntensity;
+                            jx += (Math.random() - 0.5) * 2 * amp;
+                            jy += (Math.random() - 0.5) * 2 * amp;
+                        }
                         dot.pg.setAttribute('transform', `translate(${jx},${jy})`);
-                    } else if (expand < 0.01) {
-                        dot.pg.setAttribute('transform', '');
                     }
 
                     // Sphere expansion
@@ -1260,7 +1273,7 @@
                     // ──────────────────────────────────────
                     //  P / I / PERIOD DELAMINATION
                     // ──────────────────────────────────────
-                    letters.gP.setAttribute('transform', `translate(${sP.px},${sP.py})`);
+                    letterGroups.forEach((lg, i) => lg.g.setAttribute('transform', `translate(${letterSprings[i].px},${letterSprings[i].py})`));
                     dot.cC.setAttribute('transform', `translate(${sCyan.px},${sCyan.py})`);
                     dot.mC.setAttribute('transform', `translate(${sMag.px},${sMag.py})`);
 
