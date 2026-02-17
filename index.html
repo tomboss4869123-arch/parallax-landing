@@ -37,20 +37,69 @@
             pointer-events: none;
         }
 
+        /* ── Split echoes ────────────────────────────── */
+        #echo-layer {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ghost-text {
+            position: absolute;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 18vw;
+            font-weight: 300;
+            letter-spacing: -0.02em;
+            white-space: nowrap;
+            will-change: transform, opacity;
+        }
+
+        .ghost-cyan {
+            color: #00FFFF;
+            opacity: 0;
+        }
+
+        .ghost-magenta {
+            color: #FF00FF;
+            opacity: 0;
+        }
+
+        /* ── Film grain ─────────────────────────────── */
+        #grain-overlay {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0.035;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            background-size: 256px 256px;
+            animation: grainShift 0.3s steps(1) infinite;
+        }
+
+        @keyframes grainShift {
+            0% { transform: translate(0, 0); }
+            25% { transform: translate(-32px, 16px); }
+            50% { transform: translate(16px, -24px); }
+            75% { transform: translate(-8px, 32px); }
+            100% { transform: translate(24px, -8px); }
+        }
+
         /* ── Grid overlay (100px, always visible, flashlight) ── */
         #grid-overlay {
             position: fixed;
             inset: -20px;
             pointer-events: none;
             background-image:
-                linear-gradient(rgba(0, 0, 0, 0.07) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 0, 0, 0.07) 1px, transparent 1px);
+                linear-gradient(rgba(0, 0, 0, 0.18) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 0, 0, 0.18) 1px, transparent 1px);
             background-size: 100px 100px;
             opacity: 1;
             --mx: 50vw;
             --my: 50vh;
-            -webkit-mask-image: radial-gradient(circle 350px at var(--mx) var(--my), white, rgba(255, 255, 255, 0.18));
-            mask-image: radial-gradient(circle 350px at var(--mx) var(--my), white, rgba(255, 255, 255, 0.18));
+            -webkit-mask-image: radial-gradient(circle 250px at var(--mx) var(--my), white, transparent);
+            mask-image: radial-gradient(circle 250px at var(--mx) var(--my), white, transparent);
             animation: gridBreathe 32s ease-in-out infinite;
             will-change: transform;
         }
@@ -126,6 +175,17 @@
 
         .subtext:hover {
             color: #555;
+        }
+
+        #subtext-cursor {
+            animation: blink 0.6s step-end infinite;
+            font-weight: 300;
+            color: #888;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
         }
 
         #hero-svg {
@@ -225,7 +285,12 @@
 <body>
     <!-- Landing page (front layer — gets clip-path lens hole) -->
     <div id="landing-page" style="position:fixed;inset:0;z-index:1">
+        <div id="echo-layer">
+            <span class="ghost-text ghost-cyan">Parallax</span>
+            <span class="ghost-text ghost-magenta">Parallax</span>
+        </div>
         <canvas id="particle-canvas"></canvas>
+        <div id="grain-overlay"></div>
         <div id="grid-overlay"></div>
         <div id="horizon-line"></div>
 
@@ -239,7 +304,7 @@
         <main class="flex items-center justify-center w-screen h-screen select-none" style="position:relative;z-index:1">
             <div id="hero-wrapper" class="text-center fade-in">
                 <svg id="hero-svg" role="img" aria-label="Parallax Inc."></svg>
-                <p class="subtext fade-in-delay">Soon.</p>
+                <p class="subtext" id="subtext-type"><span id="subtext-chars"></span><span id="subtext-cursor">|</span></p>
             </div>
         </main>
     </div>
@@ -312,6 +377,25 @@
                UTILITIES
                ═══════════════════════════════════════════════ */
             function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+
+            /* ═══════════════════════════════════════════════
+               TYPEWRITER
+               ═══════════════════════════════════════════════ */
+            function typewrite(el, text, delay, speed) {
+                let i = 0;
+                setTimeout(function type() {
+                    if (i < text.length) {
+                        el.textContent += text[i++];
+                        setTimeout(type, speed + Math.random() * 80);
+                    }
+                }, delay);
+            }
+
+            // Start typing "Soon." after logo fade-in (1.8s delay, ~140ms per char)
+            typewrite(
+                document.getElementById('subtext-chars'),
+                'Soon.', 1800, 140
+            );
 
             /* ═══════════════════════════════════════════════
                SVG HELPERS
@@ -412,6 +496,34 @@
                         ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
                     }
                     ctx.globalAlpha = 1;
+                    requestAnimationFrame(tick);
+                })();
+            }
+
+            /* ═══════════════════════════════════════════════
+               SPLIT ECHOES (chromatic breathing)
+               ═══════════════════════════════════════════════ */
+            function initSplitEchoes() {
+                const cyan = document.querySelector('.ghost-cyan');
+                const magenta = document.querySelector('.ghost-magenta');
+                const t0 = performance.now();
+
+                (function tick() {
+                    const t = (performance.now() - t0) * 0.001;
+
+                    // Slow breathing cycle: ~10s split apart, ~10s recombine
+                    const breath = Math.sin(t * 0.3) * 0.5 + 0.5; // 0→1→0
+                    const split = breath * 25; // max 25px separation
+
+                    // Slight horizontal drift with mouse
+                    const mx = mouse.nx * 8;
+
+                    cyan.style.opacity = breath * 0.04;
+                    cyan.style.transform = `translate(${-split + mx}px, ${-split * 0.4}px)`;
+
+                    magenta.style.opacity = breath * 0.04;
+                    magenta.style.transform = `translate(${split + mx}px, ${split * 0.4}px)`;
+
                     requestAnimationFrame(tick);
                 })();
             }
@@ -652,6 +764,7 @@
 
                     /* ── Init particles ── */
                     initParticles();
+                    initSplitEchoes();
 
                     /* ── Start interaction ── */
                     startInteraction({
