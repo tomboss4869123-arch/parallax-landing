@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Parallax Inc.</title>
-    <meta name="description" content="Parallax Inc. — A New Perspective." />
+    <title>Parallax.</title>
+    <meta name="description" content="Parallax. — Soon." />
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -177,6 +177,11 @@
             color: #555;
         }
 
+        .subtext {
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
         #subtext-cursor {
             animation: blink 0.6s step-end infinite;
             font-weight: 300;
@@ -186,6 +191,19 @@
         @keyframes blink {
             0%, 100% { opacity: 1; }
             50% { opacity: 0; }
+        }
+
+        .decrypt-char {
+            display: inline-block;
+            min-width: 0.5em;
+        }
+
+        .decrypt-char.encrypted {
+            color: #ccc;
+        }
+
+        .decrypt-char.revealed {
+            color: #111;
         }
 
         #hero-svg {
@@ -264,8 +282,12 @@
             color: #bbb;
         }
 
-        #waitlist-page button[type="submit"]:hover {
-            opacity: 0.8;
+        #glass-btn {
+            transition: border-color 0.3s ease;
+        }
+
+        #glass-btn:hover {
+            border-color: rgba(255, 255, 255, 0.15);
         }
 
         #waitlist-back {
@@ -303,7 +325,7 @@
 
         <main class="flex items-center justify-center w-screen h-screen select-none" style="position:relative;z-index:1">
             <div id="hero-wrapper" class="text-center fade-in">
-                <svg id="hero-svg" role="img" aria-label="Parallax Inc."></svg>
+                <svg id="hero-svg" role="img" aria-label="Parallax."></svg>
                 <p class="subtext" id="subtext-type"><span id="subtext-chars"></span><span id="subtext-cursor">|</span></p>
             </div>
         </main>
@@ -328,11 +350,9 @@
         </button>
 
         <div class="text-center" style="max-width:420px; padding:0 24px;">
-            <h2 id="waitlist-heading" style="font-family:'Space Grotesk',sans-serif; font-size:42px;
+            <h2 id="waitlist-heading" style="font-family:'Space Grotesk',sans-serif; font-size:clamp(28px, 6vw, 42px);
                         font-weight:400; color:#111; letter-spacing:-0.02em;
-                        line-height:1.15; margin-bottom:12px;">
-                Join the Waitlist
-            </h2>
+                        line-height:1.15; margin-bottom:12px; white-space:nowrap;"></h2>
 
             <p style="font-family:'Inter',sans-serif; font-size:13px; font-weight:300;
                       color:#888; letter-spacing:0.05em; line-height:1.6;
@@ -351,13 +371,15 @@
                            border:0.5px solid #ccc; border-radius:0;
                            outline:none; transition:border-color 0.3s ease;" />
 
-                <button type="submit"
-                    style="width:100%; max-width:340px; padding:12px 16px;
+                <button type="submit" id="glass-btn"
+                    style="position:relative; width:100%; max-width:340px; padding:14px 16px;
                            font-family:'Inter',sans-serif; font-size:11px; font-weight:400;
                            letter-spacing:0.3em; text-transform:uppercase;
-                           color:#F9F9F9; background:#111; border:none;
-                           cursor:pointer; transition:opacity 0.3s ease;">
-                    Request Access
+                           color:#F9F9F9; background:#0a0a0a;
+                           border:0.5px solid rgba(255,255,255,0.08); border-radius:8px;
+                           cursor:pointer; overflow:hidden;">
+                    <canvas id="glass-canvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;border-radius:8px;"></canvas>
+                    <span style="position:relative;z-index:1;">Request Access</span>
                 </button>
             </form>
 
@@ -391,11 +413,50 @@
                 }, delay);
             }
 
-            // Start typing "Soon." after logo fade-in (1.8s delay, ~140ms per char)
             typewrite(
                 document.getElementById('subtext-chars'),
                 'Soon.', 1800, 140
             );
+
+            /* ═══════════════════════════════════════════════
+               DECRYPTED TEXT
+               ═══════════════════════════════════════════════ */
+            function decryptText(el, text, { delay = 1800, speed = 50, maxIterations = 12, chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*' } = {}) {
+                // Create a span for each character
+                const spans = [];
+                for (let i = 0; i < text.length; i++) {
+                    const span = document.createElement('span');
+                    span.className = 'decrypt-char encrypted';
+                    span.textContent = chars[Math.floor(Math.random() * chars.length)];
+                    el.appendChild(span);
+                    spans.push({ el: span, target: text[i], iterations: 0, resolved: false });
+                }
+
+                setTimeout(() => {
+                    let current = 0;
+                    const interval = setInterval(() => {
+                        // Scramble all unresolved characters
+                        for (let i = current; i < spans.length; i++) {
+                            if (!spans[i].resolved) {
+                                spans[i].el.textContent = chars[Math.floor(Math.random() * chars.length)];
+                                spans[i].iterations++;
+                            }
+                        }
+
+                        // Resolve the current character after enough iterations
+                        if (current < spans.length && spans[current].iterations >= maxIterations) {
+                            spans[current].el.textContent = spans[current].target;
+                            spans[current].el.className = 'decrypt-char revealed';
+                            spans[current].resolved = true;
+                            current++;
+                        }
+
+                        // All done
+                        if (current >= spans.length) clearInterval(interval);
+                    }, speed);
+                }, delay);
+            }
+
 
             /* ═══════════════════════════════════════════════
                SVG HELPERS
@@ -403,7 +464,7 @@
             const NS = 'http://www.w3.org/2000/svg';
             const svg = document.getElementById('hero-svg');
             const FS = 72;
-            const TXT = 'Parallax Inc';
+            const TXT = 'Parallax';
             const FILL = '#111111';
 
             function mkEl(tag, a = {}) {
@@ -433,6 +494,148 @@
                     this.vy += (-this.k * (this.py - this.ty) - this.d * this.vy) * dt;
                     this.px += this.vx * dt; this.py += this.vy * dt;
                 }
+            }
+
+            /* ═══════════════════════════════════════════════
+               GLASS SURFACE (WebGL distortion)
+               ═══════════════════════════════════════════════ */
+            function initGlassSurface() {
+                const canvas = document.getElementById('glass-canvas');
+                const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false });
+                if (!gl) return;
+
+                const btn = document.getElementById('glass-btn');
+
+                function resize() {
+                    const r = btn.getBoundingClientRect();
+                    canvas.width = r.width * devicePixelRatio;
+                    canvas.height = r.height * devicePixelRatio;
+                }
+                resize();
+                window.addEventListener('resize', resize);
+
+                const vs = `
+                    attribute vec2 a_pos;
+                    varying vec2 v_uv;
+                    void main() {
+                        v_uv = a_pos * 0.5 + 0.5;
+                        gl_Position = vec4(a_pos, 0.0, 1.0);
+                    }
+                `;
+
+                const fs = `
+                    precision mediump float;
+                    varying vec2 v_uv;
+                    uniform float u_time;
+                    uniform vec2 u_mouse;
+                    uniform float u_hover;
+
+                    // Simplex-ish noise
+                    float hash(vec2 p) {
+                        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+                    }
+
+                    float noise(vec2 p) {
+                        vec2 i = floor(p);
+                        vec2 f = fract(p);
+                        f = f * f * (3.0 - 2.0 * f);
+                        float a = hash(i);
+                        float b = hash(i + vec2(1.0, 0.0));
+                        float c = hash(i + vec2(0.0, 1.0));
+                        float d = hash(i + vec2(1.0, 1.0));
+                        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+                    }
+
+                    void main() {
+                        vec2 uv = v_uv;
+
+                        // Displacement from noise
+                        float displace = 0.5 + u_hover * 0.3;
+                        float n = noise(uv * 3.0 + u_time * 0.3) * displace;
+                        vec2 offset = vec2(
+                            noise(uv * 4.0 + u_time * 0.2) - 0.5,
+                            noise(uv * 4.0 + u_time * 0.25 + 50.0) - 0.5
+                        ) * 0.015 * (1.0 + u_hover);
+
+                        // Chromatic aberration — offset R/G/B channels
+                        float distortionScale = -180.0 * (0.5 + u_hover * 0.5);
+                        float redOff = offset.y * distortionScale * 0.00005;
+                        float greenOff = offset.x * distortionScale * 0.00008;
+                        float blueOff = offset.y * distortionScale * 0.00012;
+
+                        // Dark glass base with subtle noise variation
+                        float r = 0.06 + n * 0.03 + redOff;
+                        float g = 0.06 + n * 0.02 + greenOff;
+                        float b = 0.08 + n * 0.03 + blueOff;
+
+                        // Subtle edge rim
+                        float edge = smoothstep(0.0, 0.12, uv.x) * smoothstep(0.0, 0.12, 1.0 - uv.x)
+                                   * smoothstep(0.0, 0.18, uv.y) * smoothstep(0.0, 0.18, 1.0 - uv.y);
+                        float rim = 1.0 - edge;
+                        r += rim * 0.04;
+                        g += rim * 0.04;
+                        b += rim * 0.06;
+
+                        // Circular specular highlight follows mouse
+                        float d = length((uv - u_mouse) * vec2(1.0, 2.2));
+                        float spec = smoothstep(0.25, 0.0, d) * 0.35 * u_hover;
+                        r += spec * 0.9;
+                        g += spec * 0.9;
+                        b += spec * 1.1;
+
+                        gl_FragColor = vec4(r, g, b, 0.97);
+                    }
+                `;
+
+                function compile(type, src) {
+                    const s = gl.createShader(type);
+                    gl.shaderSource(s, src);
+                    gl.compileShader(s);
+                    return s;
+                }
+                const prog = gl.createProgram();
+                gl.attachShader(prog, compile(gl.VERTEX_SHADER, vs));
+                gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fs));
+                gl.linkProgram(prog);
+                gl.useProgram(prog);
+
+                const buf = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+                const aPos = gl.getAttribLocation(prog, 'a_pos');
+                gl.enableVertexAttribArray(aPos);
+                gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+                const uTime = gl.getUniformLocation(prog, 'u_time');
+                const uMouse = gl.getUniformLocation(prog, 'u_mouse');
+                const uHover = gl.getUniformLocation(prog, 'u_hover');
+
+                let hovered = 0;
+                let hoverTarget = 0;
+                btn.addEventListener('mouseenter', () => { hoverTarget = 1; });
+                btn.addEventListener('mouseleave', () => { hoverTarget = 0; });
+
+                let localMx = 0.5, localMy = 0.5;
+                btn.addEventListener('mousemove', (e) => {
+                    const r = btn.getBoundingClientRect();
+                    localMx = (e.clientX - r.left) / r.width;
+                    localMy = 1.0 - (e.clientY - r.top) / r.height;
+                });
+
+                const t0 = performance.now();
+
+                (function frame() {
+                    const t = (performance.now() - t0) * 0.001;
+                    hovered += (hoverTarget - hovered) * 0.08;
+
+                    gl.viewport(0, 0, canvas.width, canvas.height);
+                    gl.uniform1f(uTime, t);
+                    gl.uniform2f(uMouse, localMx, localMy);
+                    gl.uniform1f(uHover, hovered);
+                    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+                    requestAnimationFrame(frame);
+                })();
             }
 
             /* ═══════════════════════════════════════════════
@@ -544,9 +747,9 @@
                 svg.appendChild(baseText);
 
                 const bb = baseText.getBBox();
-                const dotR = FS * 0.058;
+                const dotR = FS * 0.045;
                 const roughLast = baseText.getExtentOfChar(TXT.length - 1);
-                const roughDotCx = roughLast.x + roughLast.width + FS * 0.08 + dotR;
+                const roughDotCx = roughLast.x + roughLast.width + FS * 0.02 + dotR;
                 const pad = 20;
                 const vbX = bb.x - pad;
                 const vbY = bb.y - pad;
@@ -558,14 +761,13 @@
                 svg.style.overflow = 'visible';
                 svg.style.display = 'block';
                 svg.style.margin = '0 auto';
-                svg.style.width = '60vw';
+                svg.style.width = window.innerWidth < 600 ? '85vw' : '60vw';
                 svg.style.maxWidth = '700px';
                 svg.style.height = 'auto';
 
                 /* ── Phase 2: on-screen measurements & full assembly ── */
                 requestAnimationFrame(() => {
                     const pE = baseText.getExtentOfChar(0);
-                    const iE = baseText.getExtentOfChar(9);
                     const xE = baseText.getExtentOfChar(7);
                     const lastE = baseText.getExtentOfChar(TXT.length - 1);
                     const bbLive = baseText.getBBox();
@@ -589,15 +791,13 @@
                     const oW = vbW + pad * 4, oH = vbH + pad * 4;
                     const defs = mkEl('defs', {});
 
-                    // Clip-path for P & I
+                    // Clip-path for P
                     const cp = mkEl('clipPath', { id: 'clip-hide-PI' });
                     const pClipX = pE.x - clipM, pClipW = pE.width + clipM + clipI;
-                    const iClipX = iE.x - clipI, iClipW = iE.width + clipI + clipM;
                     const clipEl = mkEl('path', {
                         'clip-rule': 'evenodd',
                         d: `M${oX},${oY} h${oW} v${oH} h${-oW}Z ` +
-                            `M${pClipX},${pE.y - clipM} v${pE.height + clipM * 2} h${pClipW} v${-(pE.height + clipM * 2)}Z ` +
-                            `M${iClipX},${iE.y - clipM} v${iE.height + clipM * 2} h${iClipW} v${-(iE.height + clipM * 2)}Z`
+                            `M${pClipX},${pE.y - clipM} v${pE.height + clipM * 2} h${pClipW} v${-(pE.height + clipM * 2)}Z`
                     });
                     cp.appendChild(clipEl);
                     defs.appendChild(cp);
@@ -632,14 +832,9 @@
                     const tP = mkEl('text', { ...txtAttrs, x: pE.x, y: baseY });
                     tP.textContent = 'P'; gP.appendChild(tP); svg.appendChild(gP);
 
-                    /* ── Movable I ── */
-                    const gI = mkEl('g', { id: 'letter-I' });
-                    const tI = mkEl('text', { ...txtAttrs, x: iE.x, y: baseY });
-                    tI.textContent = 'I'; gI.appendChild(tI); svg.appendChild(gI);
-
                     /* ── Period group (with sphere + reticle) ── */
-                    const dotCx = lastE.x + lastE.width + FS * 0.08 + dotR;
-                    const dotCy = bbLive.y + bbLive.height - dotR * 1.1;
+                    const dotCx = lastE.x + lastE.width + FS * 0.02 + dotR;
+                    const dotCy = baseY - dotR;
                     const expandedR = dotR * 12;
 
                     const pg = mkEl('g', { id: 'period-group' });
@@ -765,10 +960,11 @@
                     /* ── Init particles ── */
                     initParticles();
                     initSplitEchoes();
+                    initGlassSurface();
 
                     /* ── Start interaction ── */
                     startInteraction({
-                        letters: { gP, gI },
+                        letters: { gP },
                         dot: { cC, mC, nC, dotCx, dotCy, dotR, pg, dotHit },
                         echoes: { echoCyan, echoMagenta, baseOff },
                         meta: { metaTopG, metaBottomG, metaSlide: baseOff * 0.6 },
@@ -788,7 +984,6 @@
 
                 /* ── Springs: original (P, I, period delamination) ── */
                 const sP = new Spring(300, 20);
-                const sI = new Spring(300, 20);
                 const sCyan = new Spring(300, 20);
                 const sMag = new Spring(300, 20);
 
@@ -836,6 +1031,11 @@
                     sWaitlistDrift.aim(0, 1);
                     waitlistPage.style.opacity = '1';
                     waitlistPage.style.pointerEvents = 'auto';
+                    // Decrypt heading
+                    waitlistHeading.innerHTML = '';
+                    decryptText(waitlistHeading, 'Join the Waitlist', {
+                        delay: 400, speed: 40, maxIterations: 8
+                    });
                 });
 
                 /* ── Lens portal: back button ── */
@@ -895,7 +1095,6 @@
                         const offX = -mx * vw * 0.02 * sc;
                         const offY = -my * vh * 0.02 * sc;
                         sP.aim(offX, offY);
-                        sI.aim(offX, offY);
 
                         // SVG coordinate conversion
                         const ctm = svg.getScreenCTM();
@@ -935,7 +1134,6 @@
                         const sc = svgScale();
                         const f = 0.3 * sc;
                         sP.aim(-gamma * f, -beta * f);
-                        sI.aim(-gamma * f, -beta * f);
                         sCyan.aim(-gamma * 0.1, -beta * 0.1);
                         sMag.aim(gamma * 0.1, beta * 0.1);
                     }
@@ -960,7 +1158,7 @@
                     prev = now;
 
                     // ── Tick springs ──
-                    sP.tick(dt); sI.tick(dt); sCyan.tick(dt); sMag.tick(dt);
+                    sP.tick(dt); sCyan.tick(dt); sMag.tick(dt);
                     sOpen.tick(dt); sEchoCyanPx.tick(dt); sEchoMagPx.tick(dt);
                     sDotExpand.tick(dt); sCursor.tick(dt); sShiver.tick(dt);
                     sCursorEcho.tick(dt); sEchoShow.tick(dt);
@@ -1044,7 +1242,6 @@
                     //  P / I / PERIOD DELAMINATION
                     // ──────────────────────────────────────
                     letters.gP.setAttribute('transform', `translate(${sP.px},${sP.py})`);
-                    letters.gI.setAttribute('transform', `translate(${sI.px},${sI.py})`);
                     dot.cC.setAttribute('transform', `translate(${sCyan.px},${sCyan.py})`);
                     dot.mC.setAttribute('transform', `translate(${sMag.px},${sMag.py})`);
 
