@@ -839,18 +839,35 @@
                     echoMagenta.textContent = 'Parallax';
                     svg.insertBefore(echoMagenta, baseText);
 
-                    /* ── Movable letters (each at different depth) ── */
-                    // Depth multipliers: vary per letter for true parallax
+                    /* ── Per-letter groups: static black + movable cyan/magenta echoes ── */
                     const depths = [1.0, 0.4, 0.7, 0.5, 0.85, 0.55, 0.65, 0.9];
                     const letterGroups = [];
                     for (let i = 0; i < TXT.length; i++) {
                         const charE = baseText.getExtentOfChar(i);
+                        const echoBaseAttrs = { ...txtAttrs, x: charE.x, y: baseY, 'pointer-events': 'none' };
+
+                        // Cyan echo (behind)
+                        const gc = mkEl('g', {});
+                        const tc = mkEl('text', { ...echoBaseAttrs, fill: '#00FFFF', opacity: 0.15 });
+                        tc.textContent = TXT[i];
+                        gc.appendChild(tc);
+                        svg.appendChild(gc);
+
+                        // Magenta echo (behind)
+                        const gm = mkEl('g', {});
+                        const tm = mkEl('text', { ...echoBaseAttrs, fill: '#FF00FF', opacity: 0.15 });
+                        tm.textContent = TXT[i];
+                        gm.appendChild(tm);
+                        svg.appendChild(gm);
+
+                        // Black letter (on top, stationary)
                         const g = mkEl('g', { id: `letter-${i}` });
                         const t = mkEl('text', { ...txtAttrs, x: charE.x, y: baseY });
                         t.textContent = TXT[i];
                         g.appendChild(t);
                         svg.appendChild(g);
-                        letterGroups.push({ g, depth: depths[i] });
+
+                        letterGroups.push({ g, gc, gm, depth: depths[i] });
                     }
 
                     /* ── Period group (with sphere + reticle) ── */
@@ -1275,7 +1292,11 @@
                     // ──────────────────────────────────────
                     //  P / I / PERIOD DELAMINATION
                     // ──────────────────────────────────────
-                    letterGroups.forEach((lg, i) => lg.g.setAttribute('transform', `translate(${letterSprings[i].px},${letterSprings[i].py})`));
+                    letterGroups.forEach((lg, i) => {
+                        const sx = letterSprings[i].px, sy = letterSprings[i].py;
+                        lg.gc.setAttribute('transform', `translate(${sx},${sy})`);
+                        lg.gm.setAttribute('transform', `translate(${-sx},${-sy})`);
+                    });
                     dot.cC.setAttribute('transform', `translate(${sCyan.px},${sCyan.py})`);
                     dot.mC.setAttribute('transform', `translate(${sMag.px},${sMag.py})`);
 
